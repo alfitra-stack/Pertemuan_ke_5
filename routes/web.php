@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
 
@@ -78,4 +79,45 @@ Route::post('/form-mahasiswa', function (Request $request) {
     $data['usia'] = (int) $data['usia'];
 
     return view('hasil-form', ['data' => $data]);
+});
+
+// ===== Pertemuan 5: Koneksi PDO =====
+Route::get('/mahasiswa/{nim?}', function (?string $nim = null) {
+    // Validasi format NIM (saran reviewer): hanya angka, 8-12 digit
+    if ($nim !== null && !preg_match('/^[0-9]{8,12}$/', $nim)) {
+        return response(
+            'Format NIM tidak valid. NIM hanya boleh berisi angka (8-12 digit).',
+            422
+        );
+    }
+
+    try {
+        $pdo = DB::connection()->getPdo();
+
+        $sql = 'SELECT m.nim, m.nama, m.email, m.usia,
+                       p.nama_prodi
+                FROM mahasiswa AS m
+                JOIN program_studi AS p
+                    ON p.id = m.program_studi_id';
+
+        if ($nim !== null) {
+            $sql .= ' WHERE m.nim = :nim';
+        }
+
+        $sql .= ' ORDER BY m.nim';
+
+        $statement = $pdo->prepare($sql);
+        $statement->execute($nim !== null ? ['nim' => $nim] : []);
+
+        $daftarMahasiswa = $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+        return view('mahasiswa', compact('daftarMahasiswa', 'nim'));
+    } catch (\Throwable $error) {
+        report($error);
+
+        return response(
+            'Koneksi atau query basis data gagal. Periksa file .env dan layanan MySQL.',
+            500
+        );
+    }
 });
